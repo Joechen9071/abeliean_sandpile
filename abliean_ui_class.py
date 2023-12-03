@@ -120,7 +120,7 @@ class WorkThread(QThread):
                     # msg_sand = np.random.choice(
                         # sandpile_elite.msg_cipher, size=1)[0]
                 else:
-                    msg_sand = sandpile_elite.msg_cipher[0]
+                    msg_sand = sandpile_elite.msg_cipher[-1]
             else:
                 msg_sand = np.random.choice(
                     sandpile_elite.msg_cipher, size=1)[0]
