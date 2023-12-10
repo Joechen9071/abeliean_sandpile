@@ -122,8 +122,13 @@ class WorkThread(QThread):
                 else:
                     msg_sand = sandpile_elite.msg_cipher[-1]
             else:
-                msg_sand = np.random.choice(
-                    sandpile_elite.msg_cipher, size=1)[0]
+                random_choice = np.random.uniform()
+                if random_choice < red_config_ratio:
+                    # print("red")
+                    msg_sand = sandpile_elite.msg_cipher[0]
+                else:
+                    # print("black")
+                    msg_sand = sandpile_elite.msg_cipher[-1]
 
             information_transmitted[msg_sand] = information_transmitted[msg_sand] + 1
             matrix = sandpile_elite.drop_sand(matrix, msg_sand)
