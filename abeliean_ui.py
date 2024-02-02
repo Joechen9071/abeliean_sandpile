@@ -15,8 +15,6 @@ class MainWindow(QWidget):
 
     def __init__(self):
         super(MainWindow, self).__init__()
-        self.setFixedHeight(1000)
-        self.setFixedWidth(820)
         title_font = QFont('Arial', 20)
         config_area = QVBoxLayout()
         title_label = QLabel(self)
@@ -53,6 +51,7 @@ class MainWindow(QWidget):
         self.worker.cum_vmap_trigger.connect(self.total_volume_heatmap_volume)
         self.worker.fat_tail_trigger.connect(self.display_fat_tail)
         self.worker.black_red_ratio_trigger.connect(self.display_ratio)
+        self.worker.falloff_bits_trigger.connect(self.display_falloff)
 
     def display_sandpile_state_map(self, image):
         image = ((image - np.min(image))/(np.max(image)-np.min(image)))*255
@@ -93,6 +92,10 @@ class MainWindow(QWidget):
                                          'color': (255, 0, 0), 'width': 2})
         self.plot.black_ratio_plot.setData(np.arange(len(black)), black, pen={
             'color': (0, 0, 0), 'width': 2})
+
+    def display_falloff(self, falloff):
+        self.plot.fallout_bits_graph.setData(np.arange(len(falloff)), falloff, pen={
+            'color': (0, 0, 255), 'width': 2})
 
 
 app = QApplication(sys.argv)

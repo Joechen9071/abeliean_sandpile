@@ -19,7 +19,10 @@ stop = False
 isPrimed = False
 black_ratio = []
 red_ratio = []
+falloff_bits_per_iter = []
 red_config_ratio = 0.0
+
+historical_matrices = []
 
 
 class WorkThread(QThread):
@@ -29,6 +32,7 @@ class WorkThread(QThread):
     cum_vmap_trigger = pyqtSignal(np.ndarray)
     fat_tail_trigger = pyqtSignal(dict)
     black_red_ratio_trigger = pyqtSignal(list)
+    falloff_bits_trigger = pyqtSignal(np.ndarray)
 
     def __int__(self):
         super(WorkThread, self).__init__()
@@ -56,7 +60,7 @@ class WorkThread(QThread):
         return [red_ratio, black_ratio]
 
     def run(self):
-        global matrix, cascades, stop, iterations, red_config_ratio
+        global matrix, cascades, stop, iterations, red_config_ratio, historical_matrices, falloff_bits_per_iter
         stop = False
 
         frequency_dict = dict()
@@ -99,6 +103,8 @@ class WorkThread(QThread):
         cascades = []
         area = []
         volume = []
+        falloff_totals = []
+        vector_x = np.vectorize(lambda arr: arr.shape[0])
 
         loss_history = []
         if isPrimed:
@@ -132,8 +138,25 @@ class WorkThread(QThread):
 
             information_transmitted[msg_sand] = information_transmitted[msg_sand] + 1
             matrix = sandpile_elite.drop_sand(matrix, msg_sand)
+
             cas_count, area_affected, cascade_magnitude, mag_area = sandpile_elite.regulate_pile(
                 matrix, i, self.trigger)
+
+            total_remain = np.sum(vector_x(matrix))
+            if len(falloff_bits_per_iter) == 0:
+                historical_matrices.append(matrix.copy())
+                falloff_bits_per_iter.append(0)
+            else:
+                previous_sum = np.sum(vector_x(historical_matrices[-1]))
+                current_sum = total_remain
+                print(previous_sum, current_sum,
+                      (previous_sum + 1 - current_sum))
+                falloff_bits_per_iter.append(
+                    (previous_sum + 1 - current_sum))
+                historical_matrices.append(matrix.copy())
+            # print(np.unique(falloff_bits_per_iter))
+            falloff_totals.append(np.sum(falloff_bits_per_iter))
+            # print(falloff_totals)
 
             sandpile_elite.update_information(information_retained, matrix)
             ce = sandpile_elite.entropy_loss(list(information_transmitted.values()), list(
@@ -156,6 +179,7 @@ class WorkThread(QThread):
                 frequency_dict[cas_count] += 1
             self.fat_tail_trigger.emit(frequency_dict)
             self.black_red_ratio_trigger.emit(self.black_red_ratio(matrix))
+            self.falloff_bits_trigger.emit(np.array(falloff_totals))
             time.sleep(0.01)
 
 
@@ -255,9 +279,11 @@ class simulation_layout(QWidget):
 
         self.elite_grid = pg.ImageItem(
             np.random.randint(255, size=(25, 25), dtype=np.uint8))  # create example image
-        self.p1.setFixedHeight(height)
-        self.p1.setFixedWidth(width)
+        # self.p1.setFixedHeight(height)
+        # self.p1.setFixedWidth(width)
         self.p1.addItem(self.elite_grid)
+        self.p1.getAxis('left').setLabel('Sandpile Height')
+        self.p1.getAxis('bottom').setLabel('Sandpile Width')
         # --------------------------------------------------------------------------------------------------------------
         p2 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2}, symbol='x', row=0,
                                col=1)
@@ -276,11 +302,16 @@ class simulation_layout(QWidget):
         self.heatmap_item.setOpts(fixedSize=(100, 100))
 
         p2.addItem(self.heatmap_item)
-        p2.setFixedHeight(height)
-        p2.setFixedWidth(width)
+        # p2.setFixedHeight(height)
+        # p2.setFixedWidth(width)
+
+        p2.getAxis('left').setLabel('Sandpile Height')
+        p2.getAxis('bottom').setLabel('Sandpile Width')
         # --------------------------------------------------------------------------------------------------------------
-        p3 = pg_layout.addPlot(row=1,
+        p3 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2}, row=1,
                                col=0, title="Number of Cascades")
+        p3.getAxis("left").setTextPen((0, 0, 0))
+        p3.getAxis("bottom").setTextPen((0, 0, 0))
 
         p3.setTitle(title="Number of Cascades",
                     color=(0, 0, 0), fontsize=20)
@@ -290,11 +321,13 @@ class simulation_layout(QWidget):
             x, y, pen={'color': (255, 0, 0), 'width': 2})
         p3.showGrid(x=True, y=True)
         p3.addItem(self.cascades_plot)
-        p3.setFixedHeight(height)
-        p3.setFixedWidth(width)
+        # p3.setFixedHeight(height)
+        # p3.setFixedWidth(width)
 
+        p3.getAxis('left').setLabel('Number of Cascade events')
+        p3.getAxis('bottom').setLabel('Unit time steps/Iterations')
         # --------------------------------------------------------------------------------------------------------------
-        p4 = pg_layout.addPlot(pen={'color': (20, 20, 0), 'width': 2}, row=1,
+        p4 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2}, row=1,
                                col=1, title="Entropy Loss")
         p4.getAxis("left").setTextPen((0, 0, 0))
         p4.getAxis("bottom").setTextPen((0, 0, 0))
@@ -305,8 +338,10 @@ class simulation_layout(QWidget):
         self.ce_plot = pg.PlotCurveItem(
             x, y, pen={'color': (0, 255, 255), 'width': 2})
         p4.addItem(self.ce_plot)
-        p4.setFixedHeight(height)
-        p4.setFixedWidth(width)
+        # p4.setFixedHeight(height)
+        # p4.setFixedWidth(width)
+        p4.getAxis('left').setLabel('Loss magnitude')
+        p4.getAxis('bottom').setLabel('Unit time steps/Iterations')
         # --------------------------------------------------------------------------------------------------------------
 
         p5 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2},
@@ -327,8 +362,10 @@ class simulation_layout(QWidget):
         self.cum_vmap_item.setOpts(fixedSize=(100, 100))
 
         p5.addItem(self.cum_vmap_item)
-        p5.setFixedHeight(height)
-        p5.setFixedWidth(width)
+        # p5.setFixedHeight(height)
+        # p5.setFixedWidth(width)
+        p5.getAxis('left').setLabel('Sandpile Height')
+        p5.getAxis('bottom').setLabel('Sandpile Width')
         # --------------------------------------------------------------------------------------------------------------
         self.fat_tail_graph = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2},
                                                 row=1, col=2, title="Sandpile")
@@ -349,16 +386,22 @@ class simulation_layout(QWidget):
         self.fat_tail_graph.addItem(self.fat_tail_scatter)
         # self.fat_tail_graph.addItem(self.fat_tail_curve)
         self.fat_tail_graph.showGrid(x=True, y=True)
-        self.fat_tail_graph.setFixedHeight(height)
-        self.fat_tail_graph.setFixedWidth(width)
+        # self.fat_tail_graph.setFixedHeight(height)
+        # self.fat_tail_graph.setFixedWidth(width)
+
+        self.fat_tail_graph.getAxis('left').setLabel(
+            'Number of cascade events (log10)')
+        self.fat_tail_graph.getAxis('bottom').setLabel(
+            'Size of cascade events (log10)')
 
         self.layout_.addWidget(pg_layout)
         self.setLayout(self.layout_)
 
         # ---------------------------------------------------------------------------------------------------------------
-        p6 = pg_layout.addPlot(row=3,
+        p6 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2}, row=3,
                                col=0, title="Black/Red ratio")
-
+        p6.getAxis("left").setTextPen((0, 0, 0))
+        p6.getAxis("bottom").setTextPen((0, 0, 0))
         p6.setTitle(title="Black/Red ratio",
                     color=(0, 0, 0), fontsize=20)
         y = np.zeros(20)
@@ -370,21 +413,43 @@ class simulation_layout(QWidget):
         p6.showGrid(x=True, y=True)
         p6.addItem(self.red_ratio_plot)
         p6.addItem(self.black_ratio_plot)
-        p6.setFixedHeight(height)
-        p6.setFixedWidth(width)
+        # p6.setFixedHeight(height)
+        # p6.setFixedWidth(width)
+
+        p6.getAxis('left').setLabel('Black vs Red ratio (%)')
+        p6.getAxis('bottom').setLabel('Unit time steps/Iterations')
+        # ----------------------------------------------------------------------------------------------------------------
+        p7 = pg_layout.addPlot(pen={'color': (0, 0, 0), 'width': 2}, row=3,
+                               col=1, title="Falloff bits")
+        p7.getAxis("left").setTextPen((0, 0, 0))
+        p7.getAxis("bottom").setTextPen((0, 0, 0))
+        p7.setTitle(title="Falloff bits",
+                    color=(0, 0, 0), fontsize=20)
+        y = np.zeros(20)
+        x = np.linspace(0, 20, 20)
+        self.fallout_bits_graph = pg.PlotCurveItem(
+            x, y, pen={'color': (0, 0, 255), 'width': 2})
+        p7.showGrid(x=True, y=True)
+        p7.addItem(self.fallout_bits_graph)
+        # p7.setFixedHeight(height)
+        # p7.setFixedWidth(width)
+
+        p7.getAxis('left').setLabel('Running total of fall-off bits')
+        p7.getAxis('bottom').setLabel('Unit time steps/Iterations')
 
     def change_prime(self):
         global isPrimed
         isPrimed = not isPrimed
 
     def update_preview(self, grid_size, elite_size, iter_counts, elite_cap, red_cf_ratio):
-        global matrix, iterations, black_ratio, red_ratio, isPrimed, red_config_ratio
+        global matrix, iterations, black_ratio, red_ratio, isPrimed, red_config_ratio, falloff_bits_per_iter
         iterations = iter_counts
         red_config_ratio = red_cf_ratio
         matrix = sandpile_elite.initialize_pile(
             grid_size, grid_size, (elite_size, elite_size))
         sandpile_elite.elite_cap = elite_cap
         black_ratio, red_ratio = [], []
+        falloff_bits_per_iter = []
         self.elite_grid.setImage(
             sandpile_elite.masking, cmap='gray', autoRange=False)
         if not isPrimed:

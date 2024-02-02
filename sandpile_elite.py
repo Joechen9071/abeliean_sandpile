@@ -89,8 +89,8 @@ def drop_sand(pile_container, msg):
                 0], np.random.randint(0, x, (1,)).flatten()[0])
     current_container = pile_container[location[0]][location[1]]
     msg = encoder_msg(msg)
-    for i in range(len(msg)):
-        current_container = np.append(current_container, msg[i])
+    # for i in range(len(msg)):
+    current_container = np.append(current_container, msg[0])
     pile_container[location[0]][location[1]] = current_container
 
     return pile_container
@@ -408,7 +408,9 @@ def entropy_loss(actual, prediction):
     P = np.array(prediction, dtype=np.float64)
 
     CE = -1*np.sum(Y*np.log(P))
-    return entropy(Y, P, base=26)
+    combination, counts = np.unique(P, return_counts=True)
+    # print(P)
+    return entropy(P, base=2)
 # def plot_references(results,note,ylabel,overlap=False,ref_index=-1,to_sort=True):
     # if overlap:
     # fig,axes = plt.subplots(2,(len(results)-1)//2)
